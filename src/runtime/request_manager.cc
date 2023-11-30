@@ -21,6 +21,7 @@
 #include <new>
 #include <stack>
 #include <stdexcept>
+#include <nvtx3/nvtx3.hpp>
 
 namespace FlexFlow {
 
@@ -2026,6 +2027,7 @@ GenerationResult RequestManager::generate_spec_infer(
     Context ctx = Runtime::get_context();
     runtime->begin_trace(ctx, 12345 /*trace_id*/);
 
+    nvtxRangePushA("ssm_inference");
     for (size_t i = 0; i < get_num_ssms(); i++) {
       for (int depth = 0; depth < BeamSearchBatchConfig::MAX_BEAM_DEPTH;
            depth++) {
@@ -2034,20 +2036,31 @@ GenerationResult RequestManager::generate_spec_infer(
         FutureMap fm = im->inference(get_model(i), 0, beam_bcf_vec[i]);
         assert(fm.get_future_map_domain().get_volume() == 1);
         BeamInferenceResultFuture beam_irf = fm.get_future(0);
+        // beam_irf.get_void_result();
         beam_bcf_vec[i] = prepare_next_batch_beam(beam_bcf_vec[i], beam_irf);
       }
     }
+    for (size_t i = 0; i < get_num_ssms(); ++i) {
+      beam_bcf_vec[i].get_void_result();
+    }
+    nvtxRangePop(); // Ends ssm_inference
+    nvtxRangePushA("llm_inference");
     // Token Tree Verification
     {
+      // nvtx3::scoped_range r{"llm_verification"};
       TreeVerifyBatchConfigFuture tree_bcf =
           prepare_next_batch_verify(beam_bcf_vec);
       FutureMap fm = im->inference(llm, 0, tree_bcf);
       assert(fm.get_future_map_domain().get_volume() == 1);
       InferenceResultFuture tree_irf = fm.get_future(0);
+      // tree_irf.get_void_result();
       batch_pipeline.push(std::make_pair(tree_bcf, tree_irf));
       last_tree_bcf = tree_bcf;
       last_tree_irf = tree_irf;
     }
+    last_tree_bcf.get_void_result();
+    last_tree_irf.get_void_result();
+    nvtxRangePop(); // Ends llm_inference
     runtime->end_trace(ctx, 12345 /*trace_id*/);
   }
 

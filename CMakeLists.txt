@@ -65,6 +65,9 @@ option(BUILD_SHARED_LIBS "Build shared libraries instead of static ones" ON)
 # option for using Python
 option(FF_USE_PYTHON "Enable Python" ON)
 
+# option for nvtx profiling
+option(FF_USE_NVTX "Enable NVTX profiling" ON)
+
 # option for building legion only 
 option(BUILD_LEGION_ONLY "Build Legion only" OFF)
 
@@ -432,6 +435,12 @@ if(NOT BUILD_LEGION_ONLY)
     endif()
   endif()
   
+  if (FF_USE_NVTX)
+    add_subdirectory(deps/nvtx/c)
+    target_include_directories(flexflow PUBLIC deps/nvtx/c/include)
+    target_link_libraries(flexflow nvtx3-cpp)
+  endif()
+
   if (INFERENCE_TESTS)
     target_link_libraries(flexflow "${TORCH_LIBRARIES}")
     set_property(TARGET flexflow PROPERTY CXX_STANDARD 14)
